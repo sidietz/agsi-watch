@@ -731,3 +731,129 @@ body {
         max-height: 250px;
     }
 }
+
+/* Imprint / Impressum View */
+.imprint-container {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.imprint-header {
+    margin-bottom: 0.5rem;
+}
+
+.imprint-header h1 {
+    font-size: 1.75rem;
+    color: var(--primary);
+    font-weight: 800;
+    margin-bottom: 0.25rem;
+}
+
+.imprint-header .subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.imprint-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.75rem 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.imprint-card h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+.imprint-card h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-top: 1rem;
+    margin-bottom: 0.4rem;
+}
+
+.imprint-card p {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    margin-bottom: 0.75rem;
+}
+
+.imprint-card p:last-child {
+    margin-bottom: 0;
+}
+
+.imprint-card ul {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.imprint-card a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.imprint-card a:hover {
+    text-decoration: underline;
+    color: var(--primary);
+}
+
+.imprint-badge {
+    display: inline-block;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
+.imprint-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.imprint-meta-box {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+}
+
+.imprint-meta-box .meta-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.imprint-meta-box .meta-val {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
