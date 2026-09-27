@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGSI Watch - European Gas Storage Transparency Viewer</title>
+    <!-- D3.js v7 (Offline bundle with CDN fallback) -->
+    <script src="/js/d3.v7.min.js"></script>
+    <script>if (!window.d3) document.write('<script src="https://cdn.jsdelivr.net/npm/d3@7"><\/script>');</script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="navbar">
+        <div class="header-container">
+            <div class="brand">
+                <div class="logo-badge">AGSI</div>
+                <div class="brand-text">
+                    <h1>AGSI Watch</h1>
+                    <span class="subtitle">European Underground Gas Storage Transparency Platform</span>
+                </div>
+            </div>
+            
+            <div class="header-controls">
+                <div class="control-item">
+                    <label for="gas-day-select">Gas Day:</label>
+                    <select id="gas-day-select" class="select-input">
+                        <option value="">Loading dates...</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <button id="refresh-btn" class="btn btn-secondary" title="Refresh data">↻ Refresh</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Global KPI Summary Ribbon -->
+    <section class="kpi-ribbon">
+        <div class="kpi-container">
+            <div class="kpi-card" id="kpi-eu">
+                <span class="kpi-title">European Union (EU)</span>
+                <div class="kpi-value-row">
+                    <span class="kpi-val" id="kpi-eu-gis">-- TWh</span>
+                    <span class="kpi-full" id="kpi-eu-full">--%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="kpi-eu-bar" style="width: 0%;"></div>
+                </div>
+                <span class="kpi-caption" id="kpi-eu-cap">Capacity: -- TWh</span>
+            </div>
+
+            <div class="kpi-card" id="kpi-noneu">
+                <span class="kpi-title">Non-EU Storage</span>
+                <div class="kpi-value-row">
+                    <span class="kpi-val" id="kpi-noneu-gis">-- TWh</span>
+                    <span class="kpi-full" id="kpi-noneu-full">--%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="kpi-noneu-bar" style="width: 0%;"></div>
+                </div>
+                <span class="kpi-caption" id="kpi-noneu-cap">Capacity: -- TWh</span>
+            </div>
+
+            <div class="kpi-card" id="kpi-facilities-stat">
+                <span class="kpi-title">Monitored Facilities</span>
+                <div class="kpi-value-row">
+                    <span class="kpi-val" id="kpi-fac-count">128</span>
+                    <span class="kpi-badge">23 Countries</span>
+                </div>
+                <div class="kpi-caption">Active Underground Storage Sites</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="tab-nav">
+        <div class="tab-container">
+            <button class="tab-btn active" data-tab="tab-table">
+                <span class="tab-icon">📋</span> Storage Inventory Status (AGSI Table)
+            </button>
+            <button class="tab-btn" data-tab="tab-chart">
+                <span class="tab-icon">📈</span> Facility Storage Time-Series (D3 Chart)
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-container">
+        <!-- VIEW 1: AGSI Table View -->
+        <section id="tab-table" class="tab-pane active">
+            <div class="view-header">
+                <div class="table-actions">
+                    <input type="text" id="table-search" class="search-input" placeholder="Search region, country, operator, or facility...">
+                    <button id="expand-all-btn" class="btn btn-outline">Expand All</button>
+                    <button id="collapse-all-btn" class="btn btn-outline">Collapse All</button>
+                </div>
+                <div class="table-legend">
+                    <span class="legend-badge badge-c">C Confirmed</span>
+                    <span class="legend-badge badge-e">E Estimated</span>
+                    <span class="legend-badge badge-n">N No Data</span>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="agsi-table" id="agsi-tree-table">
+                    <thead>
+                        <tr>
+                            <th class="col-status" title="Status: Confirmed, Estimated, No data">Status</th>
+                            <th class="col-name" style="width: 320px;">Name</th>
+                            <th class="col-num" title="Current volume in storage">Gas in Storage<br><small>(TWh)</small></th>
+                            <th class="col-num" title="Percentage of technical capacity">Full<br><small>(%)</small></th>
+                            <th class="col-num" title="Daily percentage change">Trend<br><small>(% pts)</small></th>
+                            <th class="col-num" title="National annual gas consumption">Consumption<br><small>(TWh)</small></th>
+                            <th class="col-num" title="Ratio of gas in storage to annual consumption">Stock/Cons<br><small>(%)</small></th>
+                            <th class="col-num" title="Daily injection rate">Injection<br><small>(GWh/d)</small></th>
+                            <th class="col-num" title="Daily withdrawal rate">Withdrawal<br><small>(GWh/d)</small></th>
+                            <th class="col-num" title="Technical Working Gas Volume">Tech Capacity<br><small>(TWh)</small></th>
+                            <th class="col-num" title="Percentage of market reporting">Coverage<br><small>(%)</small></th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="11" class="loading-cell">Loading gas storage inventory...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- VIEW 2: D3 Time-Series Line Chart -->
+        <section id="tab-chart" class="tab-pane">
+            <div class="chart-control-panel">
+                <div class="chart-select-group">
+                    <label for="chart-country-select">Select Country:</label>
+                    <select id="chart-country-select" class="select-input">
+                        <option value="DE" selected>Germany (DE)</option>
+                        <option value="AT">Austria (AT)</option>
+                        <option value="FR">France (FR)</option>
+                        <option value="IT">Italy (IT)</option>
+                        <option value="NL">Netherlands (NL)</option>
+                        <option value="PL">Poland (PL)</option>
+                        <option value="CZ">Czech Republic (CZ)</option>
+                        <option value="HU">Hungary (HU)</option>
+                        <option value="RO">Romania (RO)</option>
+                        <option value="UA">Ukraine (UA)</option>
+                    </select>
+                </div>
+
+                <div class="range-btn-group">
+                    <button class="btn btn-chip active" data-range="all">All (2026)</button>
+                    <button class="btn btn-chip" data-range="90">Last 90 Days</button>
+                    <button class="btn btn-chip" data-range="30">Last 30 Days</button>
+                </div>
+
+                <div class="legend-controls">
+                    <button id="chart-top5-btn" class="btn btn-outline-sm">Highlight Top 5</button>
+                    <button id="chart-all-btn" class="btn btn-outline-sm">Show All</button>
+                    <button id="chart-clear-btn" class="btn btn-outline-sm">Clear Highlights</button>
+                </div>
+            </div>
+
+            <!-- Chart and Legend Split Layout -->
+            <div class="chart-layout">
+                <div class="chart-main">
+                    <div id="d3-chart-container" class="d3-container">
+                        <!-- SVG injected by D3 -->
+                    </div>
+                    <div class="chart-footer-note">
+                        <span class="note-item"><span class="line-target-90"></span> EU Target Level (90%)</span>
+                        <span class="note-item"><span class="line-target-100"></span> Maximum Capacity (100%)</span>
+                        <span class="note-item">Hover over any line to inspect historical values. Click items in the legend to toggle or isolate facilities.</span>
+                    </div>
+                </div>
+
+                <div class="chart-sidebar">
+                    <div class="sidebar-header">
+                        <h3>Storage Facilities (<span id="sidebar-fac-count">0</span>)</h3>
+                        <input type="text" id="facility-filter-input" class="search-input-sm" placeholder="Filter facilities...">
+                    </div>
+                    <div id="facility-legend-list" class="facility-legend-list">
+                        <!-- Facility item cards generated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <div class="footer-container">
+            <p>Data Source: <a href="https://agsi.gie.eu/" target="_blank" rel="noreferrer">Gas Infrastructure Europe (GIE) - AGSI Transparency Platform</a></p>
+            <p>AGSI Watch &copy; 2026. Powered by Spring Boot &amp; PostgreSQL.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="/js/table-view.js"></script>
+    <script src="/js/d3-chart.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
