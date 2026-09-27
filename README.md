@@ -2,6 +2,9 @@
 
 A Spring Boot & D3.js web application for visualizing and auditing European Underground Gas Storage transparency data from PostgreSQL (`agsi` database).
 
+## Disclaimer
+This webapp has been entirely vibecoded using Google Gemini 3.8 Flash.
+
 ## Features
 
 1. **Storage Inventory Status (AGSI Table View)**:
@@ -31,7 +34,7 @@ A Spring Boot & D3.js web application for visualizing and auditing European Unde
 ## Running the Application
 
 ### Prerequisites
-- Java 25 (OpenJDK / GraalVM)
+- Java 21 (OpenJDK / GraalVM)
 - PostgreSQL running locally with database `agsi`
 
 ### Build & Run
@@ -45,4 +48,4 @@ java -jar build/libs/asgi-watch-0.0.1-SNAPSHOT.jar
 ```
 
 Open your browser at:
-👉 **[http://localhost:8080/](http://localhost:8080/)**
+**[http://localhost:8080/](http://localhost:8080/)**

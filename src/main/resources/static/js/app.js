@@ -26,25 +26,41 @@ const App = (() => {
         loadChartData(currentCountry);
     }
 
+    function switchTab(targetTab) {
+        const tabBtns = document.querySelectorAll(".tab-btn");
+        tabBtns.forEach(b => {
+            b.classList.toggle("active", b.dataset.tab === targetTab);
+        });
+
+        document.querySelectorAll(".tab-pane").forEach(pane => {
+            pane.classList.toggle("active", pane.id === targetTab);
+        });
+
+        if (targetTab === "tab-chart") {
+            window.dispatchEvent(new Event("resize"));
+        }
+    }
+
     function setupTabs() {
         const tabBtns = document.querySelectorAll(".tab-btn");
         tabBtns.forEach(btn => {
             btn.addEventListener("click", () => {
-                tabBtns.forEach(b => b.classList.remove("active"));
-                btn.classList.add("active");
-
-                const targetTab = btn.dataset.tab;
-                document.querySelectorAll(".tab-pane").forEach(pane => {
-                    pane.classList.remove("active");
-                });
-                document.getElementById(targetTab).classList.add("active");
-
-                // If switching to chart, trigger resize to ensure proper dimensions
-                if (targetTab === "tab-chart") {
-                    window.dispatchEvent(new Event("resize"));
-                }
+                switchTab(btn.dataset.tab);
             });
         });
+
+        const footerImprintLink = document.getElementById("footer-imprint-link");
+        if (footerImprintLink) {
+            footerImprintLink.addEventListener("click", (e) => {
+                e.preventDefault();
+                switchTab("tab-imprint");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            });
+        }
+
+        if (window.location.hash === "#tab-imprint" || window.location.hash === "#imprint" || window.location.hash === "#impressum") {
+            switchTab("tab-imprint");
+        }
     }
 
     function setupEventListeners() {
