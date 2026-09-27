@@ -24,6 +24,14 @@ class DtoTest {
         assertEquals("FR", dto2.getCode());
         assertEquals("France", dto2.getName());
         assertEquals(8, dto2.getFacilityCount());
+
+        CountryDto dto3 = new CountryDto("IT", "Italy", 15L);
+        assertEquals("IT", dto3.getCode());
+        assertEquals(15, dto3.getFacilityCount());
+
+        CountryDto dto4 = new CountryDto("ES", "Spain", (Long) null);
+        assertEquals("ES", dto4.getCode());
+        assertEquals(0, dto4.getFacilityCount());
     }
 
     @Test

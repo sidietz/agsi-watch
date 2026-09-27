@@ -1,44 +1,57 @@
 package com.oberamsystems.ai.asgi_watch.service;
 
 import com.oberamsystems.ai.asgi_watch.dto.*;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.oberamsystems.ai.asgi_watch.entity.*;
+import com.oberamsystems.ai.asgi_watch.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.*;
 
 @Service
+@Transactional(readOnly = true)
 public class StorageService {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final CountryStorageDataRepository countryStorageDataRepository;
+    private final CountryRepository countryRepository;
+    private final FacilityRepository facilityRepository;
+    private final OperatorRepository operatorRepository;
+    private final RegionRepository regionRepository;
+    private final RegionStorageDataRepository regionStorageDataRepository;
+    private final FacilityStorageDataRepository facilityStorageDataRepository;
 
-    public StorageService(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public StorageService(
+            CountryStorageDataRepository countryStorageDataRepository,
+            CountryRepository countryRepository,
+            FacilityRepository facilityRepository,
+            OperatorRepository operatorRepository,
+            RegionRepository regionRepository,
+            RegionStorageDataRepository regionStorageDataRepository,
+            FacilityStorageDataRepository facilityStorageDataRepository) {
+        this.countryStorageDataRepository = countryStorageDataRepository;
+        this.countryRepository = countryRepository;
+        this.facilityRepository = facilityRepository;
+        this.operatorRepository = operatorRepository;
+        this.regionRepository = regionRepository;
+        this.regionStorageDataRepository = regionStorageDataRepository;
+        this.facilityStorageDataRepository = facilityStorageDataRepository;
     }
 
     public List<String> getAvailableDates() {
-        String sql = "SELECT DISTINCT gas_day FROM country_storage_data ORDER BY gas_day DESC;";
-        return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("gas_day"));
+        return countryStorageDataRepository.findDistinctGasDays()
+                .stream()
+                .map(LocalDate::toString)
+                .toList();
     }
 
     public String getLatestDate() {
-        String sql = "SELECT MAX(gas_day) FROM country_storage_data;";
-        return jdbcTemplate.queryForObject(sql, String.class);
+        LocalDate latest = countryStorageDataRepository.findLatestGasDay();
+        return latest != null ? latest.toString() : null;
     }
 
     public List<CountryDto> getCountries() {
-        String sql = """
-            SELECT c.code, c.name, COUNT(DISTINCT f.code) AS facility_count
-            FROM countries c
-            JOIN facilities f ON c.code = f.country_code
-            GROUP BY c.code, c.name
-            ORDER BY facility_count DESC, c.name ASC;
-        """;
-        return jdbcTemplate.query(sql, (rs, rowNum) -> 
-            new CountryDto(rs.getString("code"), rs.getString("name"), rs.getInt("facility_count"))
-        );
+        return countryRepository.findCountriesWithFacilityCount();
     }
 
     public List<StorageNodeDto> getStorageTree(String gasDay) {
@@ -51,153 +64,91 @@ public class StorageService {
 
         LocalDate date = LocalDate.parse(gasDay);
 
-        // 1. Fetch all facilities for this date
-        String facSql = """
-            SELECT f.code, f.name, f.operator_code, f.country_code, f.facility_type,
-                   fs.status, fs.gas_in_storage, fs.full_percentage, fs.trend,
-                   fs.injection, fs.withdrawal, fs.net_withdrawal, fs.working_gas_volume,
-                   fs.injection_capacity, fs.withdrawal_capacity
-            FROM facilities f
-            LEFT JOIN facility_storage_data fs ON f.code = fs.facility_code AND fs.gas_day = ?
-            ORDER BY fs.gas_in_storage DESC NULLS LAST, f.name ASC;
-        """;
+        // 1. Fetch facilities with storage for this date
         Map<String, List<StorageNodeDto>> facilitiesByOp = new HashMap<>();
-        jdbcTemplate.query(facSql, ps -> ps.setObject(1, date), rs -> {
-            StorageNodeDto node = mapRowToNode(rs, "facility");
-            node.setFacilityType(rs.getString("facility_type"));
-            String opCode = rs.getString("operator_code");
+        List<Object[]> facRows = facilityRepository.findFacilitiesWithStorageForGasDay(date);
+        for (Object[] row : facRows) {
+            Facility f = (Facility) row[0];
+            FacilityStorageData fs = (FacilityStorageData) row[1];
+            StorageNodeDto node = createFacilityNode(f, fs);
+            String opCode = f.getOperator().getCode();
             facilitiesByOp.computeIfAbsent(opCode, k -> new ArrayList<>()).add(node);
-        });
+        }
 
-        // 2. Fetch all operators for this date
-        String opSql = """
-            SELECT o.code, o.name, o.country_code,
-                   os.status, os.gas_in_storage, os.full_percentage, os.trend,
-                   os.injection, os.withdrawal, os.net_withdrawal, os.working_gas_volume,
-                   os.injection_capacity, os.withdrawal_capacity, os.covered_capacity
-            FROM operators o
-            LEFT JOIN operator_storage_data os ON o.code = os.operator_code AND os.gas_day = ?
-            ORDER BY os.gas_in_storage DESC NULLS LAST, o.name ASC;
-        """;
+        // 2. Fetch operators with storage for this date
         Map<String, List<StorageNodeDto>> operatorsByCountry = new HashMap<>();
-        jdbcTemplate.query(opSql, ps -> ps.setObject(1, date), rs -> {
-            StorageNodeDto node = mapRowToNode(rs, "operator");
-            node.setCoveredCapacity(getDouble(rs, "covered_capacity"));
-            String ctryCode = rs.getString("country_code");
-            String opCode = rs.getString("code");
+        List<Object[]> opRows = operatorRepository.findOperatorsWithStorageForGasDay(date);
+        for (Object[] row : opRows) {
+            Operator o = (Operator) row[0];
+            OperatorStorageData os = (OperatorStorageData) row[1];
+            StorageNodeDto node = createOperatorNode(o, os);
+            String opCode = o.getCode();
             List<StorageNodeDto> facChildren = facilitiesByOp.getOrDefault(opCode, Collections.emptyList());
             node.setChildren(facChildren);
+            String ctryCode = o.getCountry().getCode();
             operatorsByCountry.computeIfAbsent(ctryCode, k -> new ArrayList<>()).add(node);
-        });
+        }
 
-        // 3. Fetch all countries for this date
-        String ctrySql = """
-            SELECT c.code, c.name, c.region_code,
-                   cs.status, cs.gas_in_storage, cs.full_percentage, cs.trend,
-                   cs.injection, cs.withdrawal, cs.net_withdrawal, cs.working_gas_volume,
-                   cs.injection_capacity, cs.withdrawal_capacity, cs.consumption,
-                   cs.consumption_full, cs.covered_capacity
-            FROM countries c
-            LEFT JOIN country_storage_data cs ON c.code = cs.country_code AND cs.gas_day = ?
-            ORDER BY cs.gas_in_storage DESC NULLS LAST, c.name ASC;
-        """;
+        // 3. Fetch countries with storage for this date
         Map<String, List<StorageNodeDto>> countriesByRegion = new HashMap<>();
-        jdbcTemplate.query(ctrySql, ps -> ps.setObject(1, date), rs -> {
-            StorageNodeDto node = mapRowToNode(rs, "country");
-            node.setConsumption(getDouble(rs, "consumption"));
-            node.setConsumptionFull(getDouble(rs, "consumption_full"));
-            node.setCoveredCapacity(getDouble(rs, "covered_capacity"));
-            String regCode = rs.getString("region_code");
-            String ctryCode = rs.getString("code");
+        List<Object[]> ctryRows = countryRepository.findCountriesWithStorageForGasDay(date);
+        for (Object[] row : ctryRows) {
+            Country c = (Country) row[0];
+            CountryStorageData cs = (CountryStorageData) row[1];
+            StorageNodeDto node = createCountryNode(c, cs);
+            String ctryCode = c.getCode();
             List<StorageNodeDto> opChildren = operatorsByCountry.getOrDefault(ctryCode, Collections.emptyList());
             node.setChildren(opChildren);
+            String regCode = c.getRegion().getCode();
             countriesByRegion.computeIfAbsent(regCode, k -> new ArrayList<>()).add(node);
-        });
+        }
 
-        // 4. Fetch all regions
-        String regSql = """
-            SELECT r.code, r.name,
-                   rs.status, rs.gas_in_storage, rs.full_percentage, rs.trend,
-                   rs.injection, rs.withdrawal, rs.net_withdrawal, rs.working_gas_volume,
-                   rs.injection_capacity, rs.withdrawal_capacity, rs.covered_capacity
-            FROM regions r
-            LEFT JOIN region_storage_data rs ON r.code = rs.region_code AND rs.gas_day = ?
-            ORDER BY r.code ASC;
-        """;
+        // 4. Fetch regions with storage for this date
         List<StorageNodeDto> regions = new ArrayList<>();
-        jdbcTemplate.query(regSql, ps -> ps.setObject(1, date), rs -> {
-            StorageNodeDto node = mapRowToNode(rs, "region");
-            node.setCoveredCapacity(getDouble(rs, "covered_capacity"));
-            String regCode = rs.getString("code");
+        List<Object[]> regRows = regionRepository.findRegionsWithStorageForGasDay(date);
+        for (Object[] row : regRows) {
+            Region r = (Region) row[0];
+            RegionStorageData rs = (RegionStorageData) row[1];
+            StorageNodeDto node = createRegionNode(r, rs);
+            String regCode = r.getCode();
             List<StorageNodeDto> ctryChildren = countriesByRegion.getOrDefault(regCode, Collections.emptyList());
             node.setChildren(ctryChildren);
             regions.add(node);
-        });
+        }
 
         return regions;
     }
 
     public List<FacilityHistorySeriesDto> getFacilityHistory(String countryCode, String fromDate, String toDate) {
-        StringBuilder sql = new StringBuilder("""
-            SELECT f.code AS facility_code,
-                   f.name AS facility_name,
-                   o.name AS operator_name,
-                   f.facility_type,
-                   fs.gas_day,
-                   fs.status,
-                   fs.gas_in_storage,
-                   fs.working_gas_volume,
-                   fs.full_percentage
-            FROM facilities f
-            JOIN operators o ON f.operator_code = o.code
-            JOIN facility_storage_data fs ON f.code = fs.facility_code
-            WHERE f.country_code = ?
-        """);
+        LocalDate from = (fromDate != null && !fromDate.isBlank()) ? LocalDate.parse(fromDate) : null;
+        LocalDate to = (toDate != null && !toDate.isBlank()) ? LocalDate.parse(toDate) : null;
 
-        List<Object> params = new ArrayList<>();
-        params.add(countryCode);
-
-        if (fromDate != null && !fromDate.isBlank()) {
-            sql.append(" AND fs.gas_day >= ?::date ");
-            params.add(fromDate);
-        }
-        if (toDate != null && !toDate.isBlank()) {
-            sql.append(" AND fs.gas_day <= ?::date ");
-            params.add(toDate);
-        }
-
-        sql.append(" ORDER BY f.name ASC, fs.gas_day ASC;");
+        List<FacilityStorageData> historyList = facilityStorageDataRepository.findFacilityHistory(countryCode, from, to);
 
         Map<String, FacilityHistorySeriesDto> seriesMap = new LinkedHashMap<>();
+        for (FacilityStorageData fs : historyList) {
+            Facility f = fs.getFacility();
+            Operator o = f.getOperator();
+            String facCode = f.getCode();
 
-        jdbcTemplate.query(sql.toString(), ps -> {
-            for (int i = 0; i < params.size(); i++) {
-                ps.setObject(i + 1, params.get(i));
-            }
-        }, rs -> {
-            String facCode = rs.getString("facility_code");
-            FacilityHistorySeriesDto series = seriesMap.computeIfAbsent(facCode, k -> {
-                try {
-                    return new FacilityHistorySeriesDto(
-                        facCode,
-                        rs.getString("facility_name"),
-                        rs.getString("operator_name"),
-                        rs.getString("facility_type"),
-                        getDouble(rs, "working_gas_volume")
-                    );
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            FacilityHistorySeriesDto series = seriesMap.computeIfAbsent(facCode, k ->
+                new FacilityHistorySeriesDto(
+                    facCode,
+                    f.getName(),
+                    o.getName(),
+                    f.getFacilityType(),
+                    fs.getWorkingGasVolume()
+                )
+            );
 
-            Double fullPct = getDouble(rs, "full_percentage");
-            Double gis = getDouble(rs, "gas_in_storage");
-            Double wgv = getDouble(rs, "working_gas_volume");
-            String day = rs.getString("gas_day");
-            String status = rs.getString("status");
-
-            series.addPoint(new FacilityHistoryPointDto(day, fullPct, gis, wgv, status));
-        });
+            series.addPoint(new FacilityHistoryPointDto(
+                fs.getGasDay().toString(),
+                fs.getFullPercentage(),
+                fs.getGasInStorage(),
+                fs.getWorkingGasVolume(),
+                fs.getStatus()
+            ));
+        }
 
         return new ArrayList<>(seriesMap.values());
     }
@@ -207,51 +158,119 @@ public class StorageService {
         Map<String, Object> summary = new HashMap<>();
         summary.put("gasDay", targetGasDay);
 
-        String sql = """
-            SELECT r.code, r.name, rs.gas_in_storage, rs.working_gas_volume, rs.full_percentage,
-                   rs.injection, rs.withdrawal, rs.net_withdrawal
-            FROM regions r
-            JOIN region_storage_data rs ON r.code = rs.region_code
-            WHERE rs.gas_day = ?::date;
-        """;
-        List<Map<String, Object>> regionsList = jdbcTemplate.query(sql, ps -> ps.setString(1, targetGasDay), (rs, rowNum) -> {
+        if (targetGasDay == null) {
+            summary.put("regions", Collections.emptyList());
+            return summary;
+        }
+
+        LocalDate date = LocalDate.parse(targetGasDay);
+        List<RegionStorageData> regionDataList = regionStorageDataRepository.findByGasDayWithRegion(date);
+
+        List<Map<String, Object>> regionsList = new ArrayList<>();
+        for (RegionStorageData rs : regionDataList) {
             Map<String, Object> m = new HashMap<>();
-            m.put("code", rs.getString("code"));
-            m.put("name", rs.getString("name"));
-            m.put("gasInStorage", getDouble(rs, "gas_in_storage"));
-            m.put("workingGasVolume", getDouble(rs, "working_gas_volume"));
-            m.put("fullPercentage", getDouble(rs, "full_percentage"));
-            m.put("injection", getDouble(rs, "injection"));
-            m.put("withdrawal", getDouble(rs, "withdrawal"));
-            m.put("netWithdrawal", getDouble(rs, "net_withdrawal"));
-            return m;
-        });
+            m.put("code", rs.getRegion().getCode());
+            m.put("name", rs.getRegion().getName());
+            m.put("gasInStorage", rs.getGasInStorage());
+            m.put("workingGasVolume", rs.getWorkingGasVolume());
+            m.put("fullPercentage", rs.getFullPercentage());
+            m.put("injection", rs.getInjection());
+            m.put("withdrawal", rs.getWithdrawal());
+            m.put("netWithdrawal", rs.getNetWithdrawal());
+            regionsList.add(m);
+        }
         summary.put("regions", regionsList);
 
         return summary;
     }
 
-    private StorageNodeDto mapRowToNode(ResultSet rs, String type) throws SQLException {
+    private StorageNodeDto createFacilityNode(Facility f, FacilityStorageData fs) {
         StorageNodeDto node = new StorageNodeDto();
-        node.setType(type);
-        node.setCode(rs.getString("code"));
-        node.setName(rs.getString("name"));
-        node.setId(type + "_" + node.getCode());
-        node.setStatus(rs.getString("status"));
-        node.setGasInStorage(getDouble(rs, "gas_in_storage"));
-        node.setFullPercentage(getDouble(rs, "full_percentage"));
-        node.setTrend(getDouble(rs, "trend"));
-        node.setInjection(getDouble(rs, "injection"));
-        node.setWithdrawal(getDouble(rs, "withdrawal"));
-        node.setNetWithdrawal(getDouble(rs, "net_withdrawal"));
-        node.setWorkingGasVolume(getDouble(rs, "working_gas_volume"));
-        node.setInjectionCapacity(getDouble(rs, "injection_capacity"));
-        node.setWithdrawalCapacity(getDouble(rs, "withdrawal_capacity"));
+        node.setType("facility");
+        node.setCode(f.getCode());
+        node.setName(f.getName());
+        node.setId("facility_" + f.getCode());
+        node.setFacilityType(f.getFacilityType());
+        if (fs != null) {
+            node.setStatus(fs.getStatus());
+            node.setGasInStorage(fs.getGasInStorage());
+            node.setFullPercentage(fs.getFullPercentage());
+            node.setTrend(fs.getTrend());
+            node.setInjection(fs.getInjection());
+            node.setWithdrawal(fs.getWithdrawal());
+            node.setNetWithdrawal(fs.getNetWithdrawal());
+            node.setWorkingGasVolume(fs.getWorkingGasVolume());
+            node.setInjectionCapacity(fs.getInjectionCapacity());
+            node.setWithdrawalCapacity(fs.getWithdrawalCapacity());
+        }
         return node;
     }
 
-    private static Double getDouble(ResultSet rs, String column) throws SQLException {
-        double val = rs.getDouble(column);
-        return rs.wasNull() ? null : val;
+    private StorageNodeDto createOperatorNode(Operator o, OperatorStorageData os) {
+        StorageNodeDto node = new StorageNodeDto();
+        node.setType("operator");
+        node.setCode(o.getCode());
+        node.setName(o.getName());
+        node.setId("operator_" + o.getCode());
+        if (os != null) {
+            node.setStatus(os.getStatus());
+            node.setGasInStorage(os.getGasInStorage());
+            node.setFullPercentage(os.getFullPercentage());
+            node.setTrend(os.getTrend());
+            node.setInjection(os.getInjection());
+            node.setWithdrawal(os.getWithdrawal());
+            node.setNetWithdrawal(os.getNetWithdrawal());
+            node.setWorkingGasVolume(os.getWorkingGasVolume());
+            node.setInjectionCapacity(os.getInjectionCapacity());
+            node.setWithdrawalCapacity(os.getWithdrawalCapacity());
+            node.setCoveredCapacity(os.getCoveredCapacity());
+        }
+        return node;
+    }
+
+    private StorageNodeDto createCountryNode(Country c, CountryStorageData cs) {
+        StorageNodeDto node = new StorageNodeDto();
+        node.setType("country");
+        node.setCode(c.getCode());
+        node.setName(c.getName());
+        node.setId("country_" + c.getCode());
+        if (cs != null) {
+            node.setStatus(cs.getStatus());
+            node.setGasInStorage(cs.getGasInStorage());
+            node.setFullPercentage(cs.getFullPercentage());
+            node.setTrend(cs.getTrend());
+            node.setInjection(cs.getInjection());
+            node.setWithdrawal(cs.getWithdrawal());
+            node.setNetWithdrawal(cs.getNetWithdrawal());
+            node.setWorkingGasVolume(cs.getWorkingGasVolume());
+            node.setInjectionCapacity(cs.getInjectionCapacity());
+            node.setWithdrawalCapacity(cs.getWithdrawalCapacity());
+            node.setConsumption(cs.getConsumption());
+            node.setConsumptionFull(cs.getConsumptionFull());
+            node.setCoveredCapacity(cs.getCoveredCapacity());
+        }
+        return node;
+    }
+
+    private StorageNodeDto createRegionNode(Region r, RegionStorageData rs) {
+        StorageNodeDto node = new StorageNodeDto();
+        node.setType("region");
+        node.setCode(r.getCode());
+        node.setName(r.getName());
+        node.setId("region_" + r.getCode());
+        if (rs != null) {
+            node.setStatus(rs.getStatus());
+            node.setGasInStorage(rs.getGasInStorage());
+            node.setFullPercentage(rs.getFullPercentage());
+            node.setTrend(rs.getTrend());
+            node.setInjection(rs.getInjection());
+            node.setWithdrawal(rs.getWithdrawal());
+            node.setNetWithdrawal(rs.getNetWithdrawal());
+            node.setWorkingGasVolume(rs.getWorkingGasVolume());
+            node.setInjectionCapacity(rs.getInjectionCapacity());
+            node.setWithdrawalCapacity(rs.getWithdrawalCapacity());
+            node.setCoveredCapacity(rs.getCoveredCapacity());
+        }
+        return node;
     }
 }

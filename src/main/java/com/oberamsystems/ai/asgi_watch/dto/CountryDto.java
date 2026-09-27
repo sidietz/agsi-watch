@@ -13,6 +13,10 @@ public class CountryDto {
         this.facilityCount = facilityCount;
     }
 
+    public CountryDto(String code, String name, Long facilityCount) {
+        this(code, name, facilityCount == null ? 0 : facilityCount.intValue());
+    }
+
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
 
