@@ -98,4 +98,49 @@ class StorageServiceIntegrationTest {
         Map<String, Object> summaryBlank = storageService.getOverviewSummary("  ");
         assertNotNull(summaryBlank);
     }
+
+    @Test
+    void testGetCountryStorageStatus() {
+        String latest = storageService.getLatestDate();
+        StorageNodeDto de = storageService.getCountryStorageStatus("DE", latest);
+        assertNotNull(de);
+        assertEquals("DE", de.getCode());
+        assertEquals("country", de.getType());
+        assertNotNull(de.getChildren());
+        assertFalse(de.getChildren().isEmpty());
+
+        StorageNodeDto nonExistent = storageService.getCountryStorageStatus("XX", latest);
+        assertNull(nonExistent);
+
+        StorageNodeDto nullCtry = storageService.getCountryStorageStatus(null, latest);
+        assertNull(nullCtry);
+
+        StorageNodeDto blankCtry = storageService.getCountryStorageStatus("   ", latest);
+        assertNull(blankCtry);
+    }
+
+    @Test
+    void testSearchFacilities() {
+        String latest = storageService.getLatestDate();
+        List<StorageNodeDto> results = storageService.searchFacilities("Bierwang", latest);
+        assertNotNull(results);
+        assertFalse(results.isEmpty());
+        assertTrue(results.stream().anyMatch(f -> f.getName().contains("Bierwang")));
+
+        List<StorageNodeDto> opResults = storageService.searchFacilities("Uniper", latest);
+        assertNotNull(opResults);
+        assertFalse(opResults.isEmpty());
+
+        List<StorageNodeDto> emptyResults = storageService.searchFacilities("NonExistentFacility12345", latest);
+        assertNotNull(emptyResults);
+        assertTrue(emptyResults.isEmpty());
+
+        List<StorageNodeDto> nullResults = storageService.searchFacilities(null, latest);
+        assertNotNull(nullResults);
+        assertTrue(nullResults.isEmpty());
+
+        List<StorageNodeDto> blankResults = storageService.searchFacilities("   ", latest);
+        assertNotNull(blankResults);
+        assertTrue(blankResults.isEmpty());
+    }
 }

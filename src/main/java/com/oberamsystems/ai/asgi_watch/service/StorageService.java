@@ -184,6 +184,52 @@ public class StorageService {
         return summary;
     }
 
+    public StorageNodeDto getCountryStorageStatus(String countryCode, String gasDay) {
+        if (countryCode == null || countryCode.isBlank()) {
+            return null;
+        }
+        List<StorageNodeDto> tree = getStorageTree(gasDay);
+        for (StorageNodeDto region : tree) {
+            if (region.getChildren() != null) {
+                for (StorageNodeDto country : region.getChildren()) {
+                    if (countryCode.trim().equalsIgnoreCase(country.getCode())) {
+                        return country;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public List<StorageNodeDto> searchFacilities(String query, String gasDay) {
+        if (query == null || query.isBlank()) {
+            return Collections.emptyList();
+        }
+        String q = query.toLowerCase().trim();
+        List<StorageNodeDto> tree = getStorageTree(gasDay);
+        List<StorageNodeDto> results = new ArrayList<>();
+        for (StorageNodeDto region : tree) {
+            if (region.getChildren() == null) continue;
+            for (StorageNodeDto country : region.getChildren()) {
+                if (country.getChildren() == null) continue;
+                for (StorageNodeDto op : country.getChildren()) {
+                    boolean opMatches = (op.getName() != null && op.getName().toLowerCase().contains(q))
+                            || (op.getCode() != null && op.getCode().toLowerCase().contains(q));
+                    if (op.getChildren() == null) continue;
+                    for (StorageNodeDto fac : op.getChildren()) {
+                        boolean facMatches = (fac.getName() != null && fac.getName().toLowerCase().contains(q))
+                                || (fac.getCode() != null && fac.getCode().toLowerCase().contains(q))
+                                || (fac.getFacilityType() != null && fac.getFacilityType().toLowerCase().contains(q));
+                        if (opMatches || facMatches) {
+                            results.add(fac);
+                        }
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
     private StorageNodeDto createFacilityNode(Facility f, FacilityStorageData fs) {
         StorageNodeDto node = new StorageNodeDto();
         node.setType("facility");
