@@ -107,4 +107,103 @@ class StorageServiceUnitTest {
         assertEquals("facility", facNode.getType());
         assertNull(facNode.getGasInStorage());
     }
+
+    @Test
+    void testCrossBorderOperatorsRollupCalculation() {
+        LocalDate date = LocalDate.of(2026, 9, 27);
+        Region r = new Region("EU", "European Union");
+        Country ctryDE = new Country("DE", "Germany", r);
+        Country ctryAT = new Country("AT", "Austria", r);
+
+        Operator opCross = new Operator("OP_CROSS", "Cross Border Operator", ctryDE);
+        Facility fDe = new Facility("F_DE", "Facility DE", opCross, ctryDE, "UGS");
+        Facility fAt = new Facility("F_AT", "Facility AT", opCross, ctryAT, "UGS");
+
+        FacilityStorageData fsDe = FacilityStorageData.builder()
+                .gasInStorage(10.0)
+                .workingGasVolume(20.0)
+                .injection(1.0)
+                .withdrawal(0.5)
+                .netWithdrawal(-0.5)
+                .injectionCapacity(5.0)
+                .withdrawalCapacity(4.0)
+                .trend(0.1)
+                .status("C")
+                .build();
+
+        FacilityStorageData fsAt = FacilityStorageData.builder()
+                .gasInStorage(5.0)
+                .workingGasVolume(10.0)
+                .injection(0.2)
+                .withdrawal(0.1)
+                .netWithdrawal(-0.1)
+                .injectionCapacity(2.0)
+                .withdrawalCapacity(1.5)
+                .trend(0.05)
+                .status("E")
+                .build();
+
+        OperatorStorageData osCross = OperatorStorageData.builder()
+                .gasInStorage(10.0)
+                .workingGasVolume(20.0)
+                .trend(0.1)
+                .status("C")
+                .build();
+
+        CountryStorageData csDe = CountryStorageData.builder().gasInStorage(10.0).build();
+        CountryStorageData csAt = CountryStorageData.builder().gasInStorage(5.0).build();
+        RegionStorageData rsEu = RegionStorageData.builder().gasInStorage(15.0).build();
+
+        when(facilityRepository.findFacilitiesWithStorageForGasDay(date))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{fDe, fsDe},
+                        new Object[]{fAt, fsAt}
+                ));
+        when(operatorRepository.findOperatorsWithStorageForGasDay(date))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{opCross, osCross}
+                ));
+        when(countryRepository.findCountriesWithStorageForGasDay(date))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{ctryDE, csDe},
+                        new Object[]{ctryAT, csAt}
+                ));
+        when(regionRepository.findRegionsWithStorageForGasDay(date))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{r, rsEu}
+                ));
+
+        List<StorageNodeDto> tree = storageService.getStorageTree("2026-09-27");
+        assertNotNull(tree);
+        assertEquals(1, tree.size());
+
+        StorageNodeDto regNode = tree.get(0);
+        assertEquals(2, regNode.getChildren().size());
+
+        StorageNodeDto deNode = regNode.getChildren().stream()
+                .filter(c -> "DE".equals(c.getCode()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, deNode.getChildren().size());
+        StorageNodeDto deOp = deNode.getChildren().get(0);
+        assertEquals("operator_DE_OP_CROSS", deOp.getId());
+        assertEquals(10.0, deOp.getGasInStorage());
+        assertEquals(20.0, deOp.getWorkingGasVolume());
+        assertEquals(50.0, deOp.getFullPercentage());
+        assertEquals(1, deOp.getChildren().size());
+        assertEquals("F_DE", deOp.getChildren().get(0).getCode());
+
+        StorageNodeDto atNode = regNode.getChildren().stream()
+                .filter(c -> "AT".equals(c.getCode()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, atNode.getChildren().size());
+        StorageNodeDto atOp = atNode.getChildren().get(0);
+        assertEquals("operator_AT_OP_CROSS", atOp.getId());
+        assertEquals(5.0, atOp.getGasInStorage());
+        assertEquals(10.0, atOp.getWorkingGasVolume());
+        assertEquals(50.0, atOp.getFullPercentage());
+        assertEquals(1, atOp.getChildren().size());
+        assertEquals("F_AT", atOp.getChildren().get(0).getCode());
+    }
 }

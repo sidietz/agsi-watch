@@ -1,9 +1,7 @@
 package com.oberamsystems.ai.asgi_watch.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
@@ -12,12 +10,19 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@ToString(onlyExplicitlyIncluded = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Facility {
 
     @Id
+    @EqualsAndHashCode.Include
+    @ToString.Include
     @Column(name = "code", length = 32, nullable = false)
     private String code;
 
+    @ToString.Include
     @Column(name = "name", length = 255, nullable = false)
     private String name;
 
@@ -29,6 +34,7 @@ public class Facility {
     @JoinColumn(name = "country_code", nullable = false)
     private Country country;
 
+    @ToString.Include
     @Column(name = "facility_type", length = 32)
     private String facilityType;
 
@@ -42,10 +48,6 @@ public class Facility {
     private LocalDateTime createdAt;
 
     public Facility(String code, String name, Operator operator, Country country, String facilityType) {
-        this.code = code;
-        this.name = name;
-        this.operator = operator;
-        this.country = country;
-        this.facilityType = facilityType;
+        this(code, name, operator, country, facilityType, null, null, null);
     }
 }
