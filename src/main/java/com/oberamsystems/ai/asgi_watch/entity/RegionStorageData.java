@@ -1,9 +1,7 @@
 package com.oberamsystems.ai.asgi_watch.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -13,16 +11,23 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@ToString(onlyExplicitlyIncluded = true)
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class RegionStorageData {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "region_code", nullable = false)
     private Region region;
 
+    @ToString.Include
     @Column(name = "gas_day", nullable = false)
     private LocalDate gasDay;
 
@@ -35,9 +40,11 @@ public class RegionStorageData {
     @Column(name = "status", length = 1)
     private String status;
 
+    @ToString.Include
     @Column(name = "gas_in_storage")
     private Double gasInStorage;
 
+    @ToString.Include
     @Column(name = "full_percentage")
     private Double fullPercentage;
 
@@ -53,6 +60,7 @@ public class RegionStorageData {
     @Column(name = "net_withdrawal")
     private Double netWithdrawal;
 
+    @ToString.Include
     @Column(name = "working_gas_volume")
     private Double workingGasVolume;
 

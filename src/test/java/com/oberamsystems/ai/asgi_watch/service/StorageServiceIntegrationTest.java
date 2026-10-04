@@ -143,4 +143,70 @@ class StorageServiceIntegrationTest {
         assertNotNull(blankResults);
         assertTrue(blankResults.isEmpty());
     }
+
+    @Test
+    void testCrossBorderOperatorsGermanyAndAustria() {
+        String latest = storageService.getLatestDate();
+        List<StorageNodeDto> tree = storageService.getStorageTree(latest);
+        assertNotNull(tree);
+
+        StorageNodeDto eu = tree.stream()
+                .filter(r -> "EU".equals(r.getCode()))
+                .findFirst()
+                .orElseThrow();
+
+        StorageNodeDto de = eu.getChildren().stream()
+                .filter(c -> "DE".equals(c.getCode()))
+                .findFirst()
+                .orElseThrow();
+
+        StorageNodeDto at = eu.getChildren().stream()
+                .filter(c -> "AT".equals(c.getCode()))
+                .findFirst()
+                .orElseThrow();
+
+        // 1. Germany assertions
+        List<StorageNodeDto> deOps = de.getChildren();
+        StorageNodeDto deSefe = deOps.stream()
+                .filter(o -> "37X0000000002964".equals(o.getCode()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(deSefe, "SEFE Storage should appear under Germany");
+        assertEquals("operator_DE_37X0000000002964", deSefe.getId());
+        assertTrue(deSefe.getChildren().stream().anyMatch(f -> f.getName().contains("Rehden")));
+        assertTrue(deSefe.getChildren().stream().noneMatch(f -> f.getName().contains("Haidach")),
+                "Austrian facility Haidach must not appear under Germany");
+
+        StorageNodeDto deUniper = deOps.stream()
+                .filter(o -> "21X000000001127H".equals(o.getCode()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(deUniper, "Uniper should appear under Germany");
+        assertEquals("operator_DE_21X000000001127H", deUniper.getId());
+        assertTrue(deUniper.getChildren().stream().anyMatch(f -> f.getName().contains("Bierwang")));
+        assertTrue(deUniper.getChildren().stream().noneMatch(f -> f.getName().contains("7 Fields")),
+                "Austrian facility 7 Fields must not appear under Germany");
+
+        // 2. Austria assertions
+        List<StorageNodeDto> atOps = at.getChildren();
+        StorageNodeDto atSefe = atOps.stream()
+                .filter(o -> "37X0000000002964".equals(o.getCode()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(atSefe, "SEFE Storage should appear under Austria");
+        assertEquals("operator_AT_37X0000000002964", atSefe.getId());
+        assertTrue(atSefe.getChildren().stream().anyMatch(f -> f.getName().contains("Haidach")));
+        assertTrue(atSefe.getChildren().stream().noneMatch(f -> f.getName().contains("Rehden")),
+                "German facility Rehden must not appear under Austria");
+
+        StorageNodeDto atUniper = atOps.stream()
+                .filter(o -> "21X000000001127H".equals(o.getCode()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(atUniper, "Uniper should appear under Austria");
+        assertEquals("operator_AT_21X000000001127H", atUniper.getId());
+        assertTrue(atUniper.getChildren().stream().anyMatch(f -> f.getName().contains("7 Fields")));
+        assertTrue(atUniper.getChildren().stream().noneMatch(f -> f.getName().contains("Bierwang")),
+                "German facility Bierwang must not appear under Austria");
+    }
 }

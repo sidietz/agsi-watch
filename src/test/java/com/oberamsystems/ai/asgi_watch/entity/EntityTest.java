@@ -304,4 +304,82 @@ class EntityTest {
         assertEquals("2026-09-27T10:00:00Z", fs.getUpdatedAtSource());
         assertEquals(now, fs.getScrapedAt());
     }
+
+    @Test
+    void testLombokBuildersAndIdentity() {
+        Region r = Region.builder()
+                .code("EU")
+                .name("European Union")
+                .createdAt(LocalDateTime.now())
+                .build();
+        assertEquals("EU", r.getCode());
+        assertEquals("European Union", r.getName());
+        assertTrue(r.toString().contains("EU"));
+
+        Region rSame = Region.builder().code("EU").name("Different Name").build();
+        Region rDiff = Region.builder().code("NE").name("Non-EU").build();
+        assertEquals(r, rSame);
+        assertNotEquals(r, rDiff);
+        assertEquals(r.hashCode(), rSame.hashCode());
+
+        Country c = Country.builder()
+                .code("DE")
+                .name("Germany")
+                .region(r)
+                .build();
+        assertEquals("DE", c.getCode());
+        assertTrue(c.toString().contains("DE"));
+        Country cSame = Country.builder().code("DE").name("Other").build();
+        assertEquals(c, cSame);
+        assertEquals(c.hashCode(), cSame.hashCode());
+
+        Operator op = Operator.builder()
+                .code("OP1")
+                .name("Uniper")
+                .country(c)
+                .build();
+        assertEquals("OP1", op.getCode());
+        assertTrue(op.toString().contains("OP1"));
+        Operator opSame = Operator.builder().code("OP1").name("Other").build();
+        assertEquals(op, opSame);
+        assertEquals(op.hashCode(), opSame.hashCode());
+
+        Facility f = Facility.builder()
+                .code("F1")
+                .name("Bierwang")
+                .operator(op)
+                .country(c)
+                .facilityType("UGS")
+                .build();
+        assertEquals("F1", f.getCode());
+        assertTrue(f.toString().contains("F1"));
+        Facility fSame = Facility.builder().code("F1").name("Other").build();
+        assertEquals(f, fSame);
+        assertEquals(f.hashCode(), fSame.hashCode());
+
+        LocalDate day = LocalDate.of(2026, 9, 28);
+        RegionStorageData rsd = RegionStorageData.builder().id(100L).region(r).gasDay(day).build();
+        RegionStorageData rsdSame = RegionStorageData.builder().id(100L).gasDay(day).build();
+        assertEquals(rsd, rsdSame);
+        assertEquals(rsd.hashCode(), rsdSame.hashCode());
+        assertTrue(rsd.toString().contains("100"));
+
+        CountryStorageData csd = CountryStorageData.builder().id(200L).country(c).gasDay(day).build();
+        CountryStorageData csdSame = CountryStorageData.builder().id(200L).build();
+        assertEquals(csd, csdSame);
+        assertEquals(csd.hashCode(), csdSame.hashCode());
+        assertTrue(csd.toString().contains("200"));
+
+        OperatorStorageData osd = OperatorStorageData.builder().id(300L).operator(op).gasDay(day).build();
+        OperatorStorageData osdSame = OperatorStorageData.builder().id(300L).build();
+        assertEquals(osd, osdSame);
+        assertEquals(osd.hashCode(), osdSame.hashCode());
+        assertTrue(osd.toString().contains("300"));
+
+        FacilityStorageData fsd = FacilityStorageData.builder().id(400L).facility(f).gasDay(day).build();
+        FacilityStorageData fsdSame = FacilityStorageData.builder().id(400L).build();
+        assertEquals(fsd, fsdSame);
+        assertEquals(fsd.hashCode(), fsdSame.hashCode());
+        assertTrue(fsd.toString().contains("400"));
+    }
 }
