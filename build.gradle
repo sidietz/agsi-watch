@@ -26,6 +26,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+	implementation 'org.apache.tomcat.embed:tomcat-embed-core:11.0.26' // fixes a CVE
+	implementation 'tools.jackson.core:jackson-databind:3.2.3' // fixes a CVE
+	implementation 'org.apache.commons:commons-lang3:3.21.0' // fixes a CVE
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
